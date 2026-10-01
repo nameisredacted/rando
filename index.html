@@ -18,7 +18,7 @@
   --sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif;
   color-scheme: dark;
 }
-html, body { height: 100%; }
+html, body { height: 100%; overflow-x: hidden; }
 body {
   background: var(--bg); color: var(--fg);
   font-family: var(--sans); margin: 0; padding-inline: 16px;
@@ -32,7 +32,7 @@ body {
   padding-block: 32px; box-sizing: border-box;
 }
 .result {
-  display: grid; grid-template-rows: 1fr auto 2.2fr; justify-items: center;
+  display: grid; grid-template-rows: 0.7fr auto 2.6fr; grid-template-columns: minmax(0, 1fr); justify-items: center;
   min-height: 0; overflow: hidden; text-align: center; cursor: pointer;
   -webkit-tap-highlight-color: transparent; user-select: none;
 }
@@ -41,7 +41,7 @@ body {
   font-weight: 200; line-height: 1; letter-spacing: -0.03em;
   font-size: clamp(96px, 34vw, 220px);
   font-variant-numeric: tabular-nums;
-  max-width: 100%; overflow-wrap: anywhere;
+  white-space: nowrap;
   transition: opacity .12s;
 }
 .num.idle { color: var(--faint); }
@@ -49,8 +49,8 @@ body {
 .range { display: none; }
 .history {
   align-self: stretch; min-height: 0; overflow: hidden;
-  display: flex; flex-direction: column; align-items: center; gap: 2px; padding-top: 16px;
-  font-size: 18px; font-weight: 200; color: var(--dim); font-variant-numeric: tabular-nums;
+  display: flex; flex-direction: column; align-items: center; gap: 14px; padding-top: 28px;
+  font-size: 18px; line-height: 1; font-weight: 200; color: var(--dim); font-variant-numeric: tabular-nums;
 }
 .controls { display: grid; gap: 20px; justify-items: center; }
 .bounds {
@@ -139,7 +139,24 @@ input#max:focus { outline: none; }
       if (el.getBoundingClientRect().bottom > box.bottom) el.hidden = true;
     }
   }
-  window.addEventListener('resize', () => fitHistory());
+  // Keep the result on one line: shrink the font only when the number is wider than the screen.
+  function fitNum() {
+    numEl.style.fontSize = '';
+    const avail = document.querySelector('.app').clientWidth;
+    const w = numEl.scrollWidth;
+    if (w > avail) {
+      const base = parseFloat(getComputedStyle(numEl).fontSize);
+      numEl.style.fontSize = Math.floor(base * avail / w * 0.98) + 'px';
+    }
+  }
+  const boundsEl = document.querySelector('.bounds');
+  function fitBounds() {
+    boundsEl.style.fontSize = '';
+    const avail = document.querySelector('.app').clientWidth;
+    const w = boundsEl.scrollWidth;
+    if (w > avail) boundsEl.style.fontSize = Math.floor(parseFloat(getComputedStyle(boundsEl).fontSize) * avail / w * 0.95) + 'px';
+  }
+  window.addEventListener('resize', () => { fitNum(); fitHistory(); fitBounds(); });
 
   function fmt(n) { return n.toLocaleString('en-US'); }
 
@@ -167,6 +184,7 @@ input#max:focus { outline: none; }
     numEl.classList.add('flash');
     requestAnimationFrame(() => requestAnimationFrame(() => {
       numEl.textContent = fmt(r);
+      fitNum();
       numEl.classList.remove('flash');
     }));
     history.unshift(r); if (history.length > 11) history.pop();
@@ -182,7 +200,7 @@ input#max:focus { outline: none; }
 
   $('form').addEventListener('submit', e => { e.preventDefault(); roll(); });
   maxEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); roll(); } });
-  maxEl.addEventListener('input', () => { maxEl.style.width = Math.max(1.2, maxEl.value.length * 0.62 + 0.1) + 'em'; });
+  maxEl.addEventListener('input', () => { maxEl.style.width = Math.max(1.2, maxEl.value.length * 0.62 + 0.1) + 'em'; fitBounds(); });
   $('result').addEventListener('click', () => { if (maxEl.value) roll(); else maxEl.focus(); });
 
   // ---- Voice ----
