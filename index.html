@@ -224,7 +224,7 @@ input#max:focus { outline: none; }
     const nums = numbersIn(transcript).filter(n => n >= 1);
     speakNext = true;
     if (nums.length) {
-      maxEl.value = String(nums[nums.length - 1]);
+      maxEl.value = String(nums[nums.length - 1]); maxEl.dispatchEvent(new Event('input'));
       roll();
       setStatus(`Heard “${transcript}”`);
     } else if (AGAIN.test(transcript.toLowerCase()) && maxEl.value) {
