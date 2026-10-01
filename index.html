@@ -51,8 +51,6 @@ body {
   align-self: stretch; min-height: 0; overflow: hidden;
   display: flex; flex-direction: column; align-items: center; gap: 6px; padding-top: 20px;
   font-size: 22px; font-weight: 200; color: var(--dim); font-variant-numeric: tabular-nums;
-  -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent);
-          mask-image: linear-gradient(to bottom, #000 55%, transparent);
 }
 .controls { display: grid; gap: 20px; justify-items: center; }
 .bounds {
@@ -159,7 +157,7 @@ input#max:focus { outline: none; }
       numEl.textContent = fmt(r);
       numEl.classList.remove('flash');
     }));
-    history.unshift(r); if (history.length > 100) history.pop();
+    history.unshift(r); if (history.length > 11) history.pop();
     histEl.textContent = '';
     history.slice(1).forEach(h => { const s = document.createElement('span'); s.textContent = fmt(h); histEl.appendChild(s); });
     setStatus('');
