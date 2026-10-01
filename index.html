@@ -32,10 +32,11 @@ body {
   padding-block: 32px; box-sizing: border-box;
 }
 .result {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 16px; min-height: 0; text-align: center; cursor: pointer;
+  display: grid; grid-template-rows: 1fr auto 1fr; justify-items: center;
+  min-height: 0; overflow: hidden; text-align: center; cursor: pointer;
   -webkit-tap-highlight-color: transparent; user-select: none;
 }
+.result::before { content: ""; }
 .num {
   font-weight: 200; line-height: 1; letter-spacing: -0.03em;
   font-size: clamp(96px, 34vw, 220px);
@@ -47,16 +48,18 @@ body {
 .num.flash { opacity: .1; }
 .range { display: none; }
 .history {
-  font-size: 14px; font-weight: 300; color: var(--dim); font-variant-numeric: tabular-nums;
-  display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; min-height: 1.2em;
+  align-self: stretch; min-height: 0; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; gap: 6px; padding-top: 20px;
+  font-size: 22px; font-weight: 200; color: var(--dim); font-variant-numeric: tabular-nums;
+  -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent);
+          mask-image: linear-gradient(to bottom, #000 55%, transparent);
 }
 .controls { display: grid; gap: 20px; justify-items: center; }
 .bounds {
   display: flex; align-items: baseline; justify-content: center; gap: 14px;
   font-size: 40px; font-weight: 200; font-variant-numeric: tabular-nums;
 }
-.one { color: var(--dim); }
-.dash { color: var(--faint); }
+.one, .dash { color: var(--fg); }
 input#max {
   font: inherit; color: var(--fg); background: transparent; border: 0; padding: 0; margin: 0;
   width: 1.2ch; min-width: 0; text-align: left; caret-color: var(--fg);
@@ -84,7 +87,6 @@ input#max:focus { outline: none; }
 <main class="app">
   <section class="result" id="result" aria-live="polite" title="Tap to roll again">
     <div id="num" class="num idle">–</div>
-    <div id="range" class="range"></div>
     <div id="history" class="history" aria-label="Previous results"></div>
   </section>
 
@@ -104,7 +106,7 @@ input#max:focus { outline: none; }
 <script>
 (() => {
   const $ = id => document.getElementById(id);
-  const numEl = $('num'), rangeEl = $('range'), histEl = $('history'),
+  const numEl = $('num'), histEl = $('history'),
         maxEl = $('max'), statusEl = $('status'), micBtn = $('mic');
   const history = [];
   const MAX_ALLOWED = Number.MAX_SAFE_INTEGER;
@@ -157,8 +159,7 @@ input#max:focus { outline: none; }
       numEl.textContent = fmt(r);
       numEl.classList.remove('flash');
     }));
-    rangeEl.textContent = `1 – ${fmt(max)}`;
-    history.unshift(r); if (history.length > 8) history.pop();
+    history.unshift(r); if (history.length > 100) history.pop();
     histEl.textContent = '';
     history.slice(1).forEach(h => { const s = document.createElement('span'); s.textContent = fmt(h); histEl.appendChild(s); });
     setStatus('');
