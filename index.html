@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rando</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;600&display=swap">
+<style>
+/* Layout: one screen, result fills the upper half, controls pinned to the bottom half. Single dark look by choice. */
+:root {
+  --bg: #0a0a0b;
+  --fg: #f2f2ee;
+  --dim: #7d7f85;
+  --line: #2a2b2f;
+  --field: #141417;
+  --accent: #f2f2ee;
+  --live: #ff4d3d;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--mono); font-size: 16px;
+  margin: 0; padding-inline: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+.app {
+  height: 100%; max-width: 520px; margin: 0 auto;
+  display: grid; grid-template-rows: 1fr auto; gap: 24px;
+  padding-block: 24px;
+  box-sizing: border-box;
+}
+.result {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px; min-height: 0; text-align: center;
+}
+.num {
+  font-weight: 300; line-height: 1; letter-spacing: -0.04em;
+  font-size: clamp(72px, 30vw, 200px);
+  font-variant-numeric: tabular-nums;
+  max-width: 100%; overflow-wrap: anywhere;
+  transition: opacity .12s;
+}
+.num.idle { color: var(--dim); }
+.num.flash { opacity: .15; }
+.range { font-size: 13px; color: var(--dim); letter-spacing: .08em; text-transform: uppercase; min-height: 1.2em; }
+.history {
+  font-size: 13px; color: var(--dim); font-variant-numeric: tabular-nums;
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 12px; min-height: 1.2em;
+}
+
+.controls { display: grid; gap: 12px; }
+.bounds {
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px;
+}
+.field {
+  display: grid; gap: 6px;
+}
+.field label { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+.box, input#max {
+  font: 400 28px/1 var(--mono); color: var(--fg);
+  background: var(--field); border: 1px solid var(--line); border-radius: 6px;
+  padding: 14px 14px; width: 100%; box-sizing: border-box;
+  font-variant-numeric: tabular-nums;
+}
+.box { color: var(--dim); user-select: none; }
+input#max::placeholder { color: #45474d; }
+input#max:focus { outline: none; border-color: var(--fg); }
+.to { color: var(--dim); font-size: 13px; padding-top: 18px; }
+
+.actions { display: grid; grid-template-columns: 1fr auto; gap: 12px; }
+button {
+  font: 600 16px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase;
+  border-radius: 6px; cursor: pointer; padding: 20px 16px;
+}
+#roll { background: var(--accent); color: var(--bg); border: 1px solid var(--accent); }
+#roll:active { transform: translateY(1px); }
+#mic {
+  background: var(--field); color: var(--fg); border: 1px solid var(--line);
+  width: 64px; padding: 0; display: grid; place-items: center;
+}
+#mic svg { width: 22px; height: 22px; }
+#mic.on { border-color: var(--live); color: var(--live); animation: pulse 1.2s ease-in-out infinite; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 6px rgba(255,77,61,.15); } }
+.status { font-size: 12px; color: var(--dim); min-height: 1.3em; text-align: center; }
+.status.err { color: var(--live); }
+@media (prefers-reduced-motion: reduce) { #mic.on { animation: none; } .num { transition: none; } }
+</style>
+</head>
+<body>
+
+<main class="app">
+  <section class="result" aria-live="polite">
+    <div id="num" class="num idle">—</div>
+    <div id="range" class="range">Set the top number</div>
+    <div id="history" class="history" aria-label="Previous results"></div>
+  </section>
+
+  <form id="form" class="controls" autocomplete="off">
+    <div class="bounds">
+      <div class="field">
+        <label>From</label>
+        <div class="box" aria-label="Lower bound, fixed at 1">1</div>
+      </div>
+      <div class="to">to</div>
+      <div class="field">
+        <label for="max">To</label>
+        <input id="max" inputmode="numeric" pattern="[0-9,]*" placeholder="" aria-label="Upper bound">
+      </div>
+    </div>
+    <div class="actions">
+      <button id="roll" type="submit">Roll</button>
+      <button id="mic" type="button" aria-label="Speak a number">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+      </button>
+    </div>
+    <div id="status" class="status">Type a number or tap the mic and say one. “Fifty.” “One to twenty.” “Again.”</div>
+  </form>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const numEl = $('num'), rangeEl = $('range'), histEl = $('history'),
+        maxEl = $('max'), statusEl = $('status'), micBtn = $('mic');
+  const history = [];
+  const MAX_ALLOWED = Number.MAX_SAFE_INTEGER;
+
+  // Unbiased uniform integer in [1, max] from the OS CSPRNG (crypto.getRandomValues) with rejection sampling.
+  function secureRandomInt(max) {
+    if (max === 1) return 1;
+    if (max <= 0x100000000) {
+      const range = max, limit = 0x100000000 - (0x100000000 % range);
+      const buf = new Uint32Array(1);
+      do { crypto.getRandomValues(buf); } while (buf[0] >= limit);
+      return (buf[0] % range) + 1;
+    }
+    // Up to 2^53: build a 53-bit value from two words, rejection-sample.
+    const range = BigInt(max), space = 1n << 53n, limit = space - (space % range);
+    const buf = new Uint32Array(2);
+    let v;
+    do {
+      crypto.getRandomValues(buf);
+      v = (BigInt(buf[0] & 0x1fffff) << 32n) | BigInt(buf[1]);
+    } while (v >= limit);
+    return Number(v % range) + 1;
+  }
+
+  function fmt(n) { return n.toLocaleString('en-US'); }
+
+  function setStatus(msg, err) {
+    statusEl.textContent = msg;
+    statusEl.classList.toggle('err', !!err);
+  }
+
+  function parseBound(raw) {
+    const s = String(raw).replace(/[,\s]/g, '');
+    if (!/^\d+$/.test(s)) return null;
+    const n = Number(s);
+    if (!Number.isSafeInteger(n) || n < 1) return null;
+    return n;
+  }
+
+  let speakNext = false;
+  function roll() {
+    const max = parseBound(maxEl.value);
+    if (maxEl.value.trim() === '') { setStatus('Enter the top number first.', true); maxEl.focus(); return; }
+    if (max === null) { setStatus('Top number must be a whole number, 1 or higher.', true); return; }
+    if (max > MAX_ALLOWED) { setStatus('Top number is too large.', true); return; }
+    const r = secureRandomInt(max);
+    numEl.classList.remove('idle');
+    numEl.classList.add('flash');
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      numEl.textContent = fmt(r);
+      numEl.classList.remove('flash');
+    }));
+    rangeEl.textContent = `1 – ${fmt(max)}`;
+    history.unshift(r); if (history.length > 8) history.pop();
+    histEl.textContent = '';
+    history.slice(1).forEach(h => { const s = document.createElement('span'); s.textContent = fmt(h); histEl.appendChild(s); });
+    setStatus('');
+    if (speakNext && 'speechSynthesis' in window) {
+      try { speechSynthesis.cancel(); speechSynthesis.speak(new SpeechSynthesisUtterance(String(r))); } catch (e) {}
+    }
+    speakNext = false;
+  }
+
+  $('form').addEventListener('submit', e => { e.preventDefault(); roll(); });
+  maxEl.addEventListener('input', () => { maxEl.value = maxEl.value.replace(/[^\d,]/g, ''); });
+
+  // ---- Voice ----
+  const SMALL = { zero:0, oh:0, one:1, won:1, two:2, to:null, too:2, three:3, four:4, for:null, five:5, six:6, seven:7, eight:8, nine:9, ten:10,
+    eleven:11, twelve:12, thirteen:13, fourteen:14, fifteen:15, sixteen:16, seventeen:17, eighteen:18, nineteen:19 };
+  const TENS = { twenty:20, thirty:30, forty:40, fourty:40, fifty:50, sixty:60, seventy:70, eighty:80, ninety:90 };
+  const SCALE = { hundred:100, thousand:1e3, million:1e6, billion:1e9, grand:1e3 };
+
+  // Returns every number spoken in the phrase, in order. Handles digits ("1 to 50") and words ("one to fifty", "a hundred and twenty").
+  function numbersIn(text) {
+    const toks = text.toLowerCase().replace(/(\d),(\d)/g, '$1$2').replace(/-/g, ' ').match(/\d+(?:\.\d+)?k?|[a-z]+/g) || [];
+    const out = [];
+    let total = 0, cur = 0, active = false;
+    const flush = () => { if (active) out.push(total + cur); total = 0; cur = 0; active = false; };
+    for (let i = 0; i < toks.length; i++) {
+      const t = toks[i];
+      if (/^\d/.test(t)) {
+        flush();
+        let n = parseFloat(t); if (t.endsWith('k')) n *= 1000;
+        cur = Math.round(n); active = true;
+        if (!(toks[i+1] in SCALE)) flush();
+        continue;
+      }
+      if (t === 'a' && (SCALE[toks[i+1]] )) { cur = 1; active = true; continue; }
+      if (t === 'and' && active) continue;
+      if (t in SMALL && SMALL[t] !== null) {
+        if (active && cur % 10 === 0 && cur % 100 !== 0 && SMALL[t] < 10 && cur !== 0) { cur += SMALL[t]; }
+        else if (active && cur === 0 && total > 0) { cur = SMALL[t]; }
+        else if (active) { flush(); cur = SMALL[t]; active = true; }
+        else { cur = SMALL[t]; active = true; }
+        continue;
+      }
+      if (t in TENS) {
+        if (active && (cur % 100 !== 0 || (cur === 0 && total === 0))) { if (cur !== 0) { flush(); } }
+        cur += TENS[t]; active = true; continue;
+      }
+      if (t in SCALE) {
+        if (!active) { cur = 1; active = true; }
+        if (SCALE[t] === 100) cur = (cur || 1) * 100;
+        else { total += (cur || 1) * SCALE[t]; cur = 0; }
+        continue;
+      }
+      flush();
+    }
+    flush();
+    return out;
+  }
+
+  const AGAIN = /\b(again|re ?roll|another|one more|repeat|roll|go|next)\b/;
+  function handleSpeech(transcript) {
+    const nums = numbersIn(transcript).filter(n => n >= 1);
+    speakNext = true;
+    if (nums.length) {
+      maxEl.value = String(nums[nums.length - 1]);
+      roll();
+      setStatus(`Heard “${transcript}”`);
+    } else if (AGAIN.test(transcript.toLowerCase()) && maxEl.value) {
+      roll();
+      setStatus(`Heard “${transcript}”`);
+    } else {
+      speakNext = false;
+      setStatus(`Heard “${transcript}” — no number in it. Try “fifty” or “one to fifty”.`, true);
+    }
+  }
+
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let rec = null, listening = false;
+  if (SR) {
+    rec = new SR();
+    rec.lang = 'en-US'; rec.interimResults = false; rec.maxAlternatives = 1; rec.continuous = false;
+    rec.onresult = e => { const t = e.results[0][0].transcript.trim(); handleSpeech(t); };
+    rec.onerror = e => {
+      const m = {
+        'not-allowed': 'Microphone access is blocked here. Allow the mic for this page, or type the number.',
+        'service-not-allowed': 'Speech recognition is blocked here. Type the number instead.',
+        'no-speech': 'Nothing heard. Tap the mic and try again.',
+        'audio-capture': 'No microphone found.',
+        'network': 'Speech recognition needs a network connection.'
+      }[e.error] || `Voice error: ${e.error}`;
+      setStatus(m, true);
+    };
+    rec.onend = () => { listening = false; micBtn.classList.remove('on'); };
+  }
+
+  micBtn.addEventListener('click', () => {
+    if (!rec) { setStatus('Voice input isn’t supported in this browser. Use Chrome or Safari, or type the number.', true); return; }
+    if (listening) { rec.stop(); return; }
+    try {
+      rec.start(); listening = true; micBtn.classList.add('on'); setStatus('Listening…');
+    } catch (e) { setStatus('Could not start the microphone. Type the number instead.', true); }
+  });
+
+  // Keyboard: Enter rolls from anywhere; "M" toggles mic when not typing.
+  document.addEventListener('keydown', e => {
+    if (e.target === maxEl) return;
+    if (e.key === 'Enter') { e.preventDefault(); roll(); }
+    else if (e.key.toLowerCase() === 'm') micBtn.click();
+  });
+
+  window.__rando = { numbersIn, secureRandomInt };
+})();
+</script>
+
+</body>
+</html>
